@@ -1,0 +1,10 @@
+streamlit
+pymupdf
+faiss-cpu==1.7.4
+numpy==1.24.3
+sentence-transformers
+torch
+transformers
+accelerate
+beautifulsoup4
+python-docx
