@@ -13,7 +13,8 @@ import io
 def load_models():
     print("Loading models...")
     retriever_model = SentenceTransformer('all-MiniLM-L6-v2')
-    model_path = "google/gemma-2b-it"
+    # --- CHANGED TO A NON-GATED MODEL ---
+    model_path = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     generator_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="cpu")
     print("Models loaded successfully.")
@@ -53,7 +54,6 @@ if uploaded_file is not None:
     st.info(f"Processing {uploaded_file.name}... Please wait.")
     file_bytes = uploaded_file.getvalue()
     
-    # Dispatcher to select the correct text extraction function
     if uploaded_file.type == "application/pdf":
         text = extract_text_from_pdf(file_bytes)
     elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -63,8 +63,6 @@ if uploaded_file is not None:
     elif uploaded_file.type == "text/html":
         text = extract_text_from_html(file_bytes)
 
-    # For simplicity, we'll treat the whole text as one document.
-    # A more advanced version would split it into smaller chunks.
     st.session_state.documents = [text]
     
     doc_embeddings = retriever.encode(st.session_state.documents)
