@@ -1,7 +1,7 @@
 streamlit
 pymupdf
-faiss-cpu==1.7.4
 numpy==1.24.3
+hnswlib
 sentence-transformers
 torch
 transformers

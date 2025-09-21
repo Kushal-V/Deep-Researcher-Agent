@@ -2,25 +2,22 @@ import streamlit as st
 import fitz  # PyMuPDF for PDFs
 import docx  # python-docx for DOCX
 from bs4 import BeautifulSoup # for HTML
-import faiss
+import hnswlib # Replaced faiss with hnswlib
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import io
 
-# Use Streamlit's cache to load models only once
 @st.cache_resource
 def load_models():
     print("Loading models...")
     retriever_model = SentenceTransformer('all-MiniLM-L6-v2')
-    # --- CHANGED TO A NON-GATED MODEL ---
     model_path = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     generator_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="cpu")
     print("Models loaded successfully.")
     return retriever_model, tokenizer, generator_model
 
-# --- Text Extraction Functions for each file type ---
 def extract_text_from_pdf(file_bytes):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     text = " ".join([page.get_text() for page in doc])
@@ -38,14 +35,13 @@ def extract_text_from_html(file_bytes):
     soup = BeautifulSoup(file_bytes, "html.parser")
     return soup.get_text()
 
-# --- Main App Logic ---
 st.title("🧠 Deep Researcher Agent (Multi-Format)")
 st.write("Upload a PDF, DOCX, TXT, or HTML file to begin.")
 
 retriever, tokenizer, generator = load_models()
 
-if 'faiss_index' not in st.session_state:
-    st.session_state.faiss_index = None
+if 'hnsw_index' not in st.session_state:
+    st.session_state.hnsw_index = None
     st.session_state.documents = []
 
 uploaded_file = st.file_uploader("Upload your document", type=["pdf", "docx", "txt", "html"])
@@ -67,29 +63,27 @@ if uploaded_file is not None:
     
     doc_embeddings = retriever.encode(st.session_state.documents)
     dimension = doc_embeddings.shape[1]
-    faiss_index = faiss.IndexFlatL2(dimension)
-    faiss_index.add(doc_embeddings)
-    st.session_state.faiss_index = faiss_index
+    
+    # --- HNSWLIB Index Creation ---
+    hnsw_index = hnswlib.Index(space='l2', dim=dimension)
+    hnsw_index.init_index(max_elements=len(st.session_state.documents), ef_construction=200, M=16)
+    hnsw_index.add_items(doc_embeddings, np.arange(len(st.session_state.documents)))
+    st.session_state.hnsw_index = hnsw_index
     
     st.success(f"{uploaded_file.name} processed successfully! You can now ask questions.")
 
-if st.session_state.faiss_index is not None:
+if st.session_state.hnsw_index is not None:
     query = st.text_input("Ask a question about the document:")
 
     if query:
         query_embedding = retriever.encode([query])
-        distances, indices = st.session_state.faiss_index.search(query_embedding, k=1)
-        retrieved_chunk = st.session_state.documents[indices[0][0]]
+        labels, distances = st.session_state.hnsw_index.knn_query(query_embedding, k=1)
+        retrieved_chunk = st.session_state.documents[labels[0][0]]
 
         prompt_template = f"""
         Answer the following question using only the context provided.
-
-        Context:
-        "{retrieved_chunk}"
-
-        Question:
-        "{query}"
-
+        Context: "{retrieved_chunk}"
+        Question: "{query}"
         Answer:
         """
 
