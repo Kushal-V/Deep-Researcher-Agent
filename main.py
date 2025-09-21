@@ -7,17 +7,28 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import io
+import os # Import the os library
 
+# Use Streamlit's cache to load models only once
 @st.cache_resource
 def load_models():
-    print("Loading models...")
+    print("Loading models with authentication...")
+    # Get the token from Streamlit secrets
+    hf_token = os.environ.get("HUGGING_FACE_TOKEN")
+
     retriever_model = SentenceTransformer('all-MiniLM-L6-v2')
-    model_path = "sshleifer/tiny-gpt2"
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    generator_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="cpu")
+    model_path = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    
+    # Use the token to authenticate
+    tokenizer = AutoTokenizer.from_pretrained(model_path, token=hf_token)
+    generator_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="cpu", token=hf_token)
+    
     print("Models loaded successfully.")
     return retriever_model, tokenizer, generator_model
 
+# --- The rest of your code remains exactly the same ---
+# (Text Extraction Functions and Main App Logic)
+# ...
 def extract_text_from_pdf(file_bytes):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     text = " ".join([page.get_text() for page in doc])
@@ -79,15 +90,9 @@ if st.session_state.hnsw_index is not None:
         labels, distances = st.session_state.hnsw_index.knn_query(query_embedding, k=1)
         retrieved_chunk = st.session_state.documents[labels[0][0]]
 
-        # --- THIS IS THE FIX ---
-        # Truncate context to fit the model's max length (e.g., 1024 for GPT-2)
-        # We leave a buffer for the prompt and the answer.
-        max_chunk_length = 800
-        truncated_chunk = retrieved_chunk[:max_chunk_length]
-
         prompt_template = f"""
         Answer the following question using only the context provided.
-        Context: "{truncated_chunk}"
+        Context: "{retrieved_chunk}"
         Question: "{query}"
         Answer:
         """
