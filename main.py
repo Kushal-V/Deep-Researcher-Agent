@@ -5,18 +5,22 @@ from bs4 import BeautifulSoup
 import hnswlib
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import io
 
 # Use Streamlit's cache to load models only once
 @st.cache_resource
 def load_models():
-    print("Loading models...")
+    print("Loading models directly...")
     retriever_model = SentenceTransformer('all-MiniLM-L6-v2')
-    # Using a smaller model that doesn't require a token and fits in memory
-    generator_pipe = pipeline('text-generation', model='distilgpt2')
+    
+    # Load the small model and tokenizer directly
+    model_name = "distilgpt2"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    generator_model = AutoModelForCausalLM.from_pretrained(model_name)
+    
     print("Models loaded successfully.")
-    return retriever_model, generator_pipe
+    return retriever_model, tokenizer, generator_model
 
 def extract_text_from_pdf(file_bytes):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -38,7 +42,7 @@ def extract_text_from_html(file_bytes):
 st.title("🧠 Deep Researcher Agent (Multi-Format)")
 st.write("Upload a PDF, DOCX, TXT, or HTML file to begin.")
 
-retriever, generator = load_models()
+retriever, tokenizer, generator = load_models()
 
 if 'hnsw_index' not in st.session_state:
     st.session_state.hnsw_index = None
@@ -87,14 +91,16 @@ if st.session_state.hnsw_index is not None:
         """
 
         with st.spinner("Generating answer..."):
-            # Use the pipeline for generation
-            response = generator(prompt_template, max_new_tokens=100, num_return_sequences=1)
-            # Extract the generated text and then the answer part
-            full_text = response[0]['generated_text']
-            if "Answer:" in full_text:
-                answer = full_text.split("Answer:")[1].strip()
+            input_ids = tokenizer(prompt_template, return_tensors="pt").to("cpu")
+            # Generate using the model directly
+            outputs = generator.generate(**input_ids, max_new_tokens=100, pad_token_id=tokenizer.eos_token_id)
+            response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            if "Answer:" in response:
+                answer = response.split("Answer:")[1].strip()
             else:
-                answer = "Could not find a specific answer in the context."
+                # Fallback if the model doesn't follow the prompt structure
+                answer = response.replace(prompt_template, "").strip()
 
 
         st.markdown("---")
