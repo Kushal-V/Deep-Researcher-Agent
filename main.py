@@ -1,8 +1,8 @@
 import streamlit as st
-import fitz  # PyMuPDF for PDFs
-import docx  # python-docx for DOCX
-from bs4 import BeautifulSoup # for HTML
-import hnswlib 
+import fitz
+import docx
+from bs4 import BeautifulSoup
+import hnswlib
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -12,7 +12,6 @@ import io
 def load_models():
     print("Loading models...")
     retriever_model = SentenceTransformer('all-MiniLM-L6-v2')
-    # --- CHANGED TO A SMALLER, GUARANTEED-TO-RUN MODEL ---
     model_path = "sshleifer/tiny-gpt2"
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     generator_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="cpu")
@@ -80,9 +79,15 @@ if st.session_state.hnsw_index is not None:
         labels, distances = st.session_state.hnsw_index.knn_query(query_embedding, k=1)
         retrieved_chunk = st.session_state.documents[labels[0][0]]
 
+        # --- THIS IS THE FIX ---
+        # Truncate context to fit the model's max length (e.g., 1024 for GPT-2)
+        # We leave a buffer for the prompt and the answer.
+        max_chunk_length = 800
+        truncated_chunk = retrieved_chunk[:max_chunk_length]
+
         prompt_template = f"""
         Answer the following question using only the context provided.
-        Context: "{retrieved_chunk}"
+        Context: "{truncated_chunk}"
         Question: "{query}"
         Answer:
         """
