@@ -1,6 +1,6 @@
 streamlit
 pymupdf
-numpy==1.24.3
+numpy
 hnswlib
 sentence-transformers
 torch
