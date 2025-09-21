@@ -2,7 +2,7 @@ import streamlit as st
 import fitz  # PyMuPDF for PDFs
 import docx  # python-docx for DOCX
 from bs4 import BeautifulSoup # for HTML
-import hnswlib # Replaced faiss with hnswlib
+import hnswlib 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -12,7 +12,8 @@ import io
 def load_models():
     print("Loading models...")
     retriever_model = SentenceTransformer('all-MiniLM-L6-v2')
-    model_path = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    # --- CHANGED TO A SMALLER, GUARANTEED-TO-RUN MODEL ---
+    model_path = "sshleifer/tiny-gpt2"
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     generator_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="cpu")
     print("Models loaded successfully.")
@@ -64,7 +65,6 @@ if uploaded_file is not None:
     doc_embeddings = retriever.encode(st.session_state.documents)
     dimension = doc_embeddings.shape[1]
     
-    # --- HNSWLIB Index Creation ---
     hnsw_index = hnswlib.Index(space='l2', dim=dimension)
     hnsw_index.init_index(max_elements=len(st.session_state.documents), ef_construction=200, M=16)
     hnsw_index.add_items(doc_embeddings, np.arange(len(st.session_state.documents)))
