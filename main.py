@@ -9,21 +9,27 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import io
 import os # Import the os library
 
-# Use Streamlit's cache to load models only once
 @st.cache_resource
 def load_models():
-    print("Loading models with authentication...")
+    print("--- SCRIPT: Attempting to load all models. ---")
     # Get the token from Streamlit secrets
     hf_token = os.environ.get("HUGGING_FACE_TOKEN")
 
+    print("--- SCRIPT: Loading SentenceTransformer retriever model. ---")
     retriever_model = SentenceTransformer('all-MiniLM-L6-v2')
+    print("--- SCRIPT: Retriever loaded successfully. ---")
+
     model_path = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-    
-    # Use the token to authenticate
+
+    print(f"--- SCRIPT: Loading tokenizer for {model_path}. ---")
     tokenizer = AutoTokenizer.from_pretrained(model_path, token=hf_token)
+    print("--- SCRIPT: Tokenizer loaded successfully. ---")
+
+    print(f"--- SCRIPT: Loading generator model {model_path}. This is the memory-intensive step. ---")
     generator_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="cpu", token=hf_token)
-    
-    print("Models loaded successfully.")
+    print("--- SCRIPT: Generator model loaded successfully. ---")
+
+    print("--- SCRIPT: All models loaded. Application should be ready. ---")
     return retriever_model, tokenizer, generator_model
 
 # --- The rest of your code remains exactly the same ---
