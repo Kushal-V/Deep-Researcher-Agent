@@ -5,36 +5,19 @@ from bs4 import BeautifulSoup
 import hnswlib
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import io
-import os # Import the os library
 
+# Use Streamlit's cache to load models only once
 @st.cache_resource
 def load_models():
-    print("--- SCRIPT: Attempting to load all models. ---")
-    # Get the token from Streamlit secrets
-    hf_token = os.environ.get("HUGGING_FACE_TOKEN")
-
-    print("--- SCRIPT: Loading SentenceTransformer retriever model. ---")
+    print("Loading models...")
     retriever_model = SentenceTransformer('all-MiniLM-L6-v2')
-    print("--- SCRIPT: Retriever loaded successfully. ---")
+    # Using a smaller model that doesn't require a token and fits in memory
+    generator_pipe = pipeline('text-generation', model='distilgpt2')
+    print("Models loaded successfully.")
+    return retriever_model, generator_pipe
 
-    model_path = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-
-    print(f"--- SCRIPT: Loading tokenizer for {model_path}. ---")
-    tokenizer = AutoTokenizer.from_pretrained(model_path, token=hf_token)
-    print("--- SCRIPT: Tokenizer loaded successfully. ---")
-
-    print(f"--- SCRIPT: Loading generator model {model_path}. This is the memory-intensive step. ---")
-    generator_model = AutoModelForCausalLM.from_pretrained(model_path, device_map="cpu", token=hf_token)
-    print("--- SCRIPT: Generator model loaded successfully. ---")
-
-    print("--- SCRIPT: All models loaded. Application should be ready. ---")
-    return retriever_model, tokenizer, generator_model
-
-# --- The rest of your code remains exactly the same ---
-# (Text Extraction Functions and Main App Logic)
-# ...
 def extract_text_from_pdf(file_bytes):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     text = " ".join([page.get_text() for page in doc])
@@ -55,7 +38,7 @@ def extract_text_from_html(file_bytes):
 st.title("🧠 Deep Researcher Agent (Multi-Format)")
 st.write("Upload a PDF, DOCX, TXT, or HTML file to begin.")
 
-retriever, tokenizer, generator = load_models()
+retriever, generator = load_models()
 
 if 'hnsw_index' not in st.session_state:
     st.session_state.hnsw_index = None
@@ -104,10 +87,15 @@ if st.session_state.hnsw_index is not None:
         """
 
         with st.spinner("Generating answer..."):
-            input_ids = tokenizer(prompt_template, return_tensors="pt").to("cpu")
-            outputs = generator.generate(**input_ids, max_new_tokens=200)
-            response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            answer = response.split("Answer:")[1].strip()
+            # Use the pipeline for generation
+            response = generator(prompt_template, max_new_tokens=100, num_return_sequences=1)
+            # Extract the generated text and then the answer part
+            full_text = response[0]['generated_text']
+            if "Answer:" in full_text:
+                answer = full_text.split("Answer:")[1].strip()
+            else:
+                answer = "Could not find a specific answer in the context."
+
 
         st.markdown("---")
         st.write("### Answer")
